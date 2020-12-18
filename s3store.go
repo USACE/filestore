@@ -68,48 +68,54 @@ func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject,
 	fmt.Println(s3Path)
 	fmt.Println("<<<<<<<>>>>>>>>>")
 	s3client := s3.New(s3fs.session)
-	params := &s3.ListObjectsV2Input{
-		Bucket:            aws.String(s3fs.config.S3Bucket),
-		Prefix:            &s3Path,
-		Delimiter:         aws.String(delim),
-		MaxKeys:           &s3fs.maxKeys,
-		ContinuationToken: nil,
-	}
-
-	resp, err := s3client.ListObjectsV2(params)
-	if err != nil {
-		log.Printf("failed to list objects in the bucket - %v", err)
+	query := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(s3fs.config.S3Bucket),
+		Prefix:    &s3Path,
+		Delimiter: aws.String(delim),
+		MaxKeys:   &s3fs.maxKeys,
 	}
 
 	result := []FileStoreResultObject{}
-	var count int = 0
-	for _, cp := range resp.CommonPrefixes {
-		w := FileStoreResultObject{
-			ID:         count,
-			Name:       filepath.Base(*cp.Prefix),
-			Size:       "",
-			Path:       *cp.Prefix,
-			Type:       "",
-			IsDir:      true,
-			ModifiedBy: "",
-		}
-		count++
-		result = append(result, w)
-	}
+	truncatedListing := true
+	var count int
+	for truncatedListing {
 
-	for _, object := range resp.Contents {
-		w := FileStoreResultObject{
-			ID:         count,
-			Name:       filepath.Base(*object.Key),
-			Size:       strconv.FormatInt(*object.Size, 10),
-			Path:       filepath.Dir(*object.Key),
-			Type:       filepath.Ext(*object.Key),
-			IsDir:      false,
-			Modified:   *object.LastModified,
-			ModifiedBy: "",
+		resp, err := s3client.ListObjectsV2(query)
+		if err != nil {
+			log.Printf("failed to list objects in the bucket - %v", err)
 		}
-		count++
-		result = append(result, w)
+
+		for _, cp := range resp.CommonPrefixes {
+			w := FileStoreResultObject{
+				ID:         count,
+				Name:       filepath.Base(*cp.Prefix),
+				Size:       "",
+				Path:       *cp.Prefix,
+				Type:       "",
+				IsDir:      true,
+				ModifiedBy: "",
+			}
+			count++
+			result = append(result, w)
+		}
+
+		for _, object := range resp.Contents {
+			w := FileStoreResultObject{
+				ID:         count,
+				Name:       filepath.Base(*object.Key),
+				Size:       strconv.FormatInt(*object.Size, 10),
+				Path:       filepath.Dir(*object.Key),
+				Type:       filepath.Ext(*object.Key),
+				IsDir:      false,
+				Modified:   *object.LastModified,
+				ModifiedBy: "",
+			}
+			count++
+			result = append(result, w)
+		}
+
+		query.ContinuationToken = resp.NextContinuationToken
+		truncatedListing = *resp.IsTruncated
 	}
 
 	return &result, nil
