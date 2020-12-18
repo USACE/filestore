@@ -143,11 +143,6 @@ func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, err
 	return output, err
 }
 
-func (s3fs *S3FS) deleteObjectsImpl(svc *s3.S3, input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
-	result, err := svc.DeleteObjects(input)
-	return result, err
-}
-
 func (s3fs *S3FS) DeleteObjects(path ...string) error {
 	svc := s3.New(s3fs.session)
 	objects := make([]*s3.ObjectIdentifier, 0, len(path))
@@ -168,7 +163,7 @@ func (s3fs *S3FS) DeleteObjects(path ...string) error {
 		},
 	}
 
-	output, err := s3fs.deleteObjectsImpl(svc, input)
+	output, err := svc.DeleteObjects(input)
 	log.Println("--------DELETE OPERATION OUTPUT------------")
 	log.Print(output)
 	log.Println("--------DELETE OPERATION OUTPUT------------")
