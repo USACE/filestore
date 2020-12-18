@@ -24,11 +24,6 @@ const (
 
 var chunkSize int64 = 10 * 1024 * 1024
 
-type PathConfig struct {
-	Path  string
-	Paths []string
-}
-
 type FileOperationOutput struct {
 	Md5 string
 }
@@ -74,13 +69,12 @@ type UploadResult struct {
 
 type FileVisitFunction func(path string, file os.FileInfo) error
 
-//@TODO evaluate PathConfig as an input.  should this just be a string path.....
 type FileStore interface {
-	GetDir(path PathConfig) (*[]FileStoreResultObject, error)
-	GetObject(PathConfig) (io.ReadCloser, error)
-	PutObject(PathConfig, []byte) (*FileOperationOutput, error)
+	GetDir(string) (*[]FileStoreResultObject, error)
+	GetObject(string) (io.ReadCloser, error)
+	PutObject(string, []byte) (*FileOperationOutput, error)
 	DeleteObject(path string) error //depricate eventually?
-	DeleteObjects(path PathConfig) error
+	DeleteObjects(path ...string) error
 	//PutMultipartObject(u UploadConfig) (UploadResult, error)
 	//InitializeMultipartWrite
 	//PutPart(u UploadConfig) (UploadResult, error)

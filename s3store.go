@@ -58,8 +58,8 @@ type S3FS struct {
 	maxKeys   int64
 }
 
-func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+func (s3fs *S3FS) GetDir(path string) (*[]FileStoreResultObject, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	fmt.Println("<<<<<<<>>>>>>>>>")
 	fmt.Println("S3 DIR Request")
 	fmt.Println(s3Path)
@@ -112,8 +112,8 @@ func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 	return &result, nil
 }
 
-func (s3fs *S3FS) GetObject(path PathConfig) (io.ReadCloser, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+func (s3fs *S3FS) GetObject(path string) (io.ReadCloser, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
 		Bucket: &s3fs.config.S3Bucket,
@@ -144,8 +144,8 @@ func (s3fs *S3FS) DeleteObject(path string) error {
 	return err
 }
 
-func (s3fs *S3FS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	reader := bytes.NewReader(data)
 	input := &s3.PutObjectInput{
@@ -169,10 +169,10 @@ func (s3fs *S3FS) deleteObjectsImpl(svc *s3.S3, input *s3.DeleteObjectsInput) (*
 	return result, err
 }
 
-func (s3fs *S3FS) DeleteObjects(path PathConfig) error {
+func (s3fs *S3FS) DeleteObjects(path ...string) error {
 	svc := s3.New(s3fs.session)
-	objects := make([]*s3.ObjectIdentifier, 0, len(path.Paths))
-	for _, p := range path.Paths {
+	objects := make([]*s3.ObjectIdentifier, 0, len(path))
+	for _, p := range path {
 		p := p
 		s3Path := strings.TrimPrefix(p, "/")
 		object := &s3.ObjectIdentifier{
@@ -283,7 +283,10 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 		for _, content := range resp.Contents {
 			//fmt.Printf("Processing: %s\n", *content.Key)
 			fileInfo := &S3FileInfo{content}
-			vistorFunction("/"+*content.Key, fileInfo)
+			err := vistorFunction("/"+*content.Key, fileInfo)
+			if err != nil {
+				return err
+			}
 		}
 		query.ContinuationToken = resp.NextContinuationToken
 		truncatedListing = *resp.IsTruncated
@@ -294,8 +297,8 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 /*
   these functions are not part of the filestore interface and are unique to the S3FS
 */
-func (s3fs *S3FS) GetPresignedUrl(path PathConfig, days int) (string, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+func (s3fs *S3FS) SharedAccessURL(path string, days int) (string, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
 		Bucket: &s3fs.config.S3Bucket,
@@ -309,8 +312,8 @@ func (s3fs *S3FS) GetPresignedUrl(path PathConfig, days int) (string, error) {
 	return urlStr, err
 }
 
-func (s3fs *S3FS) SetObjectPublic(path PathConfig) (string, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	acl := "public-read"
 	input := &s3.PutObjectAclInput{

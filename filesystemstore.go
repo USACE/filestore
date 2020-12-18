@@ -18,9 +18,9 @@ type BlockFSConfig struct{}
 
 type BlockFS struct{}
 
-func (b *BlockFS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
-	fmt.Println(path.Path)
-	dirContents, err := ioutil.ReadDir(path.Path)
+func (b *BlockFS) GetDir(path string) (*[]FileStoreResultObject, error) {
+	fmt.Println(path)
+	dirContents, err := ioutil.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (b *BlockFS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 			ID:         i,
 			Name:       f.Name(),
 			Size:       size,
-			Path:       path.Path,
+			Path:       path,
 			Type:       filepath.Ext(f.Name()),
 			IsDir:      f.IsDir(),
 			Modified:   f.ModTime(),
@@ -41,8 +41,8 @@ func (b *BlockFS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 	return &objects, nil
 }
 
-func (b *BlockFS) GetObject(path PathConfig) (io.ReadCloser, error) {
-	return os.Open(path.Path)
+func (b *BlockFS) GetObject(path string) (io.ReadCloser, error) {
+	return os.Open(path)
 }
 
 func (b *BlockFS) DeleteObject(path string) error {
@@ -55,9 +55,9 @@ func (b *BlockFS) DeleteObject(path string) error {
 	return err
 }
 
-func (b *BlockFS) DeleteObjects(path PathConfig) error {
+func (b *BlockFS) DeleteObjects(path ...string) error {
 	var err error
-	for _, p := range path.Paths {
+	for _, p := range path {
 		if isDir(p) {
 			err = os.RemoveAll(p)
 		} else {
@@ -67,13 +67,13 @@ func (b *BlockFS) DeleteObjects(path PathConfig) error {
 	return err
 }
 
-func (b *BlockFS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {
+func (b *BlockFS) PutObject(path string, data []byte) (*FileOperationOutput, error) {
 	if len(data) == 0 {
 		f := FileOperationOutput{}
-		err := os.MkdirAll(filepath.Dir(path.Path), os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
 		return &f, err
 	} else {
-		f, err := os.OpenFile(path.Path, os.O_WRONLY|os.O_CREATE, 0644)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return nil, err
 		}
