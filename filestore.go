@@ -73,7 +73,6 @@ type FileStore interface {
 	GetDir(string) (*[]FileStoreResultObject, error)
 	GetObject(string) (io.ReadCloser, error)
 	PutObject(string, []byte) (*FileOperationOutput, error)
-	DeleteObject(path string) error //depricate eventually?
 	DeleteObjects(path ...string) error
 	//PutMultipartObject(u UploadConfig) (UploadResult, error)
 	//InitializeMultipartWrite

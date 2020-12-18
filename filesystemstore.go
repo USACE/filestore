@@ -45,16 +45,6 @@ func (b *BlockFS) GetObject(path string) (io.ReadCloser, error) {
 	return os.Open(path)
 }
 
-func (b *BlockFS) DeleteObject(path string) error {
-	var err error
-	if isDir(path) {
-		err = os.RemoveAll(path)
-	} else {
-		err = os.Remove(path)
-	}
-	return err
-}
-
 func (b *BlockFS) DeleteObjects(path ...string) error {
 	var err error
 	for _, p := range path {

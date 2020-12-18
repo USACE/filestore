@@ -123,27 +123,6 @@ func (s3fs *S3FS) GetObject(path string) (io.ReadCloser, error) {
 	return output.Body, err
 }
 
-func (s3fs *S3FS) DeleteObject(path string) error {
-	s3Path := strings.TrimPrefix(path, "/")
-	svc := s3.New(s3fs.session)
-	input := &s3.DeleteObjectsInput{
-		Bucket: aws.String(s3fs.config.S3Bucket),
-		Delete: &s3.Delete{
-			Objects: []*s3.ObjectIdentifier{
-				{
-					Key: aws.String(s3Path),
-				},
-			},
-			Quiet: aws.Bool(false),
-		},
-	}
-	output, err := s3fs.deleteObjectsImpl(svc, input)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	log.Print(output)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	return err
-}
-
 func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, error) {
 	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
