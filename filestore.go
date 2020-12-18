@@ -70,7 +70,7 @@ type UploadResult struct {
 type FileVisitFunction func(path string, file os.FileInfo) error
 
 type FileStore interface {
-	GetDir(string) (*[]FileStoreResultObject, error)
+	GetDir(string, bool) (*[]FileStoreResultObject, error)
 	GetObject(string) (io.ReadCloser, error)
 	PutObject(string, []byte) (*FileOperationOutput, error)
 	DeleteObjects(path ...string) error
@@ -101,10 +101,9 @@ func NewFileStore(config interface{}) (FileStore, error) {
 		}
 
 		fs := S3FS{
-			session:   sess,
-			config:    &s3config,
-			delimiter: "/",
-			maxKeys:   1000,
+			session: sess,
+			config:  &s3config,
+			maxKeys: 1000,
 		}
 		return &fs, nil
 

@@ -52,14 +52,17 @@ type S3FSConfig struct {
 }
 
 type S3FS struct {
-	session   *session.Session
-	config    *S3FSConfig
-	delimiter string
-	maxKeys   int64
+	session *session.Session
+	config  *S3FSConfig
+	maxKeys int64
 }
 
-func (s3fs *S3FS) GetDir(path string) (*[]FileStoreResultObject, error) {
-	s3Path := strings.TrimPrefix(path, "/")
+func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject, error) {
+	s3Path := strings.Trim(path, "/") + "/"
+	var delim string
+	if !recursive {
+		delim = "/"
+	}
 	fmt.Println("<<<<<<<>>>>>>>>>")
 	fmt.Println("S3 DIR Request")
 	fmt.Println(s3Path)
@@ -68,7 +71,7 @@ func (s3fs *S3FS) GetDir(path string) (*[]FileStoreResultObject, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket:            aws.String(s3fs.config.S3Bucket),
 		Prefix:            &s3Path,
-		Delimiter:         &s3fs.delimiter,
+		Delimiter:         aws.String(delim),
 		MaxKeys:           &s3fs.maxKeys,
 		ContinuationToken: nil,
 	}

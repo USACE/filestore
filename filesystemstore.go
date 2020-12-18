@@ -18,24 +18,54 @@ type BlockFSConfig struct{}
 
 type BlockFS struct{}
 
-func (b *BlockFS) GetDir(path string) (*[]FileStoreResultObject, error) {
+func (b *BlockFS) GetDir(path string, recursive bool) (*[]FileStoreResultObject, error) {
 	fmt.Println(path)
-	dirContents, err := ioutil.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-	objects := make([]FileStoreResultObject, len(dirContents))
-	for i, f := range dirContents {
-		size := strconv.FormatInt(f.Size(), 10)
-		objects[i] = FileStoreResultObject{
-			ID:         i,
-			Name:       f.Name(),
-			Size:       size,
-			Path:       path,
-			Type:       filepath.Ext(f.Name()),
-			IsDir:      f.IsDir(),
-			Modified:   f.ModTime(),
-			ModifiedBy: "",
+
+	var objects []FileStoreResultObject
+	switch recursive {
+	case true:
+		objects = make([]FileStoreResultObject, 0)
+		i := 0
+		err := filepath.Walk(
+			path,
+			func(path string, file os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				objects = append(objects, FileStoreResultObject{
+					ID:         i,
+					Name:       file.Name(),
+					Size:       strconv.FormatInt(file.Size(), 10),
+					Path:       filepath.Dir(path),
+					Type:       filepath.Ext(file.Name()),
+					IsDir:      file.IsDir(),
+					Modified:   file.ModTime(),
+					ModifiedBy: "",
+				})
+				i++
+				return nil
+			})
+		if err != nil {
+			return nil, err
+		}
+
+	case false:
+		contents, err := ioutil.ReadDir(path)
+		if err != nil {
+			return nil, err
+		}
+		objects = make([]FileStoreResultObject, len(contents))
+		for i, f := range contents {
+			objects[i] = FileStoreResultObject{
+				ID:         i,
+				Name:       f.Name(),
+				Size:       strconv.FormatInt(f.Size(), 10),
+				Path:       path,
+				Type:       filepath.Ext(f.Name()),
+				IsDir:      f.IsDir(),
+				Modified:   f.ModTime(),
+				ModifiedBy: "",
+			}
 		}
 	}
 	return &objects, nil
