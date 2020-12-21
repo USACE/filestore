@@ -306,3 +306,10 @@ func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {
 	_, err := svc.PutObjectAcl(input)
 	return url, err
 }
+
+// Ping makes a cheap call to the s3 bucket to ensure connection
+func (s3fs *S3FS) Ping() error {
+	svc := s3.New(s3fs.session)
+	_, err := svc.GetBucketAcl(&s3.GetBucketAclInput{Bucket: aws.String(s3fs.config.S3Bucket)})
+	return err
+}
