@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -63,16 +62,12 @@ func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject,
 	if !recursive {
 		delim = "/"
 	}
-	fmt.Println("<<<<<<<>>>>>>>>>")
-	fmt.Println("S3 DIR Request")
-	fmt.Println(s3Path)
-	fmt.Println("<<<<<<<>>>>>>>>>")
 	s3client := s3.New(s3fs.session)
 	query := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(s3fs.config.S3Bucket),
-		Prefix:    &s3Path,
+		Prefix:    aws.String(s3Path),
 		Delimiter: aws.String(delim),
-		MaxKeys:   &s3fs.maxKeys,
+		MaxKeys:   aws.Int64(s3fs.maxKeys),
 	}
 
 	result := []FileStoreResultObject{}
@@ -82,7 +77,7 @@ func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject,
 
 		resp, err := s3client.ListObjectsV2(query)
 		if err != nil {
-			log.Printf("failed to list objects in the bucket - %v", err)
+			return nil, err
 		}
 
 		for _, cp := range resp.CommonPrefixes {
@@ -125,8 +120,8 @@ func (s3fs *S3FS) GetObject(path string) (io.ReadCloser, error) {
 	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
-		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(s3Path),
 	}
 	output, err := svc.GetObject(input)
 	return output.Body, err
@@ -139,24 +134,19 @@ func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, err
 	input := &s3.PutObjectInput{
 		Body:          reader,
 		ContentLength: aws.Int64(int64(len(data))),
-		Key:           &s3Path,
+		Key:           aws.String(s3Path),
 	}
 	s3output, err := svc.PutObject(input)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Print(s3output)
-	output := &FileOperationOutput{
-		Md5: *s3output.ETag,
-	}
-	return output, err
+	return &FileOperationOutput{Md5: *s3output.ETag}, nil
 }
 
 func (s3fs *S3FS) DeleteObjects(path ...string) error {
 	svc := s3.New(s3fs.session)
 	objects := make([]*s3.ObjectIdentifier, 0, len(path))
 	for _, p := range path {
-		p := p
 		s3Path := strings.TrimPrefix(p, "/")
 		object := &s3.ObjectIdentifier{
 			Key: aws.String(s3Path),
@@ -172,17 +162,14 @@ func (s3fs *S3FS) DeleteObjects(path ...string) error {
 		},
 	}
 
-	output, err := svc.DeleteObjects(input)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	log.Print(output)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
+	_, err := svc.DeleteObjects(input)
 	return err
 }
 
 func (s3fs *S3FS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {
 	output := UploadResult{}
 	svc := s3.New(s3fs.session)
-	s3path := u.ObjectPath //@TODO incomoplete
+	s3path := u.ObjectPath //@TODO incomplete
 	s3path = strings.TrimPrefix(s3path, "/")
 	input := &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(s3fs.config.S3Bucket),
@@ -204,10 +191,10 @@ func (s3fs *S3FS) WriteChunk(u UploadConfig) (UploadResult, error) {
 	partNumber := u.ChunkId + 1 //aws chunks are 1 to n, our chunks are 0 referenced
 	partInput := &s3.UploadPartInput{
 		Body:          bytes.NewReader(u.Data),
-		Bucket:        &s3fs.config.S3Bucket,
-		Key:           &s3path,
+		Bucket:        aws.String(s3fs.config.S3Bucket),
+		Key:           aws.String(s3path),
 		PartNumber:    aws.Int64(partNumber),
-		UploadId:      &u.UploadId,
+		UploadId:      aws.String(u.UploadId),
 		ContentLength: aws.Int64(int64(len(u.Data))),
 	}
 	result, err := svc.UploadPart(partInput)
@@ -227,22 +214,21 @@ func (s3fs *S3FS) CompleteObjectUpload(u CompletedObjectUploadConfig) error {
 	s3path = strings.TrimPrefix(s3path, "/")
 	svc := s3.New(s3fs.session)
 	cp := []*s3.CompletedPart{}
-	for i, cuId := range u.ChunkUploadIds {
+	for i, cuID := range u.ChunkUploadIds {
 		cp = append(cp, &s3.CompletedPart{
-			ETag:       aws.String(cuId),
+			ETag:       aws.String(cuID),
 			PartNumber: aws.Int64(int64(i + 1)),
 		})
 	}
 	input := &s3.CompleteMultipartUploadInput{
-		Bucket:   &s3fs.config.S3Bucket,
-		Key:      &s3path,
-		UploadId: &u.UploadId,
+		Bucket:   aws.String(s3fs.config.S3Bucket),
+		Key:      aws.String(s3path),
+		UploadId: aws.String(u.UploadId),
 		MultipartUpload: &s3.CompletedMultipartUpload{
 			Parts: cp,
 		},
 	}
-	result, err := svc.CompleteMultipartUpload(input)
-	fmt.Print(result)
+	_, err := svc.CompleteMultipartUpload(input)
 	return err
 }
 
@@ -251,8 +237,8 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 	s3delim := ""
 	query := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(s3fs.config.S3Bucket),
-		Prefix:    &s3Path,
-		Delimiter: &s3delim,
+		Prefix:    aws.String(s3Path),
+		Delimiter: aws.String(s3delim),
 	}
 	svc := s3.New(s3fs.session)
 
@@ -283,7 +269,7 @@ func (s3fs *S3FS) SharedAccessURL(path string, expiration time.Duration) (string
 	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
-		Bucket: &s3fs.config.S3Bucket,
+		Bucket: aws.String(s3fs.config.S3Bucket),
 		Key:    aws.String(s3Path),
 	}
 	req, _ := svc.GetObjectRequest(input)
@@ -294,17 +280,12 @@ func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {
 	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	acl := "public-read"
-	input := &s3.PutObjectAclInput{
-		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
-		ACL:    &acl,
-	}
-	aclResp, err := svc.PutObjectAcl(input)
-	if err != nil {
-		log.Printf("Failed to add public-read ACL on %s\n", s3Path)
-		log.Println(aclResp)
-	}
 	url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s3fs.config.S3Bucket, s3Path)
-	log.Println(url)
+	input := &s3.PutObjectAclInput{
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(s3Path),
+		ACL:    aws.String(acl),
+	}
+	_, err := svc.PutObjectAcl(input)
 	return url, err
 }
