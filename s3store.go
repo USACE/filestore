@@ -264,7 +264,6 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 			return err
 		}
 		for _, content := range resp.Contents {
-			//fmt.Printf("Processing: %s\n", *content.Key)
 			fileInfo := &S3FileInfo{content}
 			err := vistorFunction("/"+*content.Key, fileInfo)
 			if err != nil {
@@ -280,19 +279,15 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 /*
   these functions are not part of the filestore interface and are unique to the S3FS
 */
-func (s3fs *S3FS) SharedAccessURL(path string, days int) (string, error) {
+func (s3fs *S3FS) SharedAccessURL(path string, expiration time.Duration) (string, error) {
 	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
 		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
+		Key:    aws.String(s3Path),
 	}
 	req, _ := svc.GetObjectRequest(input)
-	urlStr, err := req.Presign(time.Duration(24*days) * time.Hour)
-	if err != nil {
-		log.Println("Failed to sign request", err)
-	}
-	return urlStr, err
+	return req.Presign(expiration)
 }
 
 func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {

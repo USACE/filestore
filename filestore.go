@@ -2,7 +2,6 @@ package filestore
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -108,7 +107,7 @@ func NewFileStore(config interface{}) (FileStore, error) {
 		return &fs, nil
 
 	default:
-		return nil, errors.New(fmt.Sprintf("Invalid File System System Type Configuration: %v", scType))
+		return nil, fmt.Errorf("Invalid File System System Type Configuration: %v", scType)
 	}
 }
 
