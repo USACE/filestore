@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,34 +15,42 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
+// S3FileInfo is a wrapper around the s3.Object struct that implements the os.FileInfo interface
 type S3FileInfo struct {
 	s3 *s3.Object
 }
 
+// Name returns the file name of the s3 object
 func (obj *S3FileInfo) Name() string {
 	return *obj.s3.Key
 }
 
+// Size returns the file size in bytes
 func (obj *S3FileInfo) Size() int64 {
 	return *obj.s3.Size
 }
 
+// Mode defaults to Irregular
 func (obj *S3FileInfo) Mode() os.FileMode {
 	return os.ModeIrregular
 }
 
+// ModTime returns the time the s3 object was last modified
 func (obj *S3FileInfo) ModTime() time.Time {
 	return *obj.s3.LastModified
 }
 
+// IsDir returns a boolean determining whether an object is a directory or not
 func (obj *S3FileInfo) IsDir() bool {
 	return false
 }
 
+// Sys defaults to nil for objects of s3
 func (obj *S3FileInfo) Sys() interface{} {
 	return nil
 }
 
+// S3FSConfig stores the configuration and credentials necessary to create an s3 instance of the filestore
 type S3FSConfig struct {
 	S3Id     string
 	S3Key    string
@@ -51,129 +58,108 @@ type S3FSConfig struct {
 	S3Bucket string
 }
 
+// S3FS satisfies the FileStore interface, allowing for generic file operations to be done on s3 blobs
 type S3FS struct {
-	session   *session.Session
-	config    *S3FSConfig
-	delimiter string
-	maxKeys   int64
+	session *session.Session
+	config  *S3FSConfig
+	maxKeys int64
 }
 
-func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
-	fmt.Println("<<<<<<<>>>>>>>>>")
-	fmt.Println("S3 DIR Request")
-	fmt.Println(s3Path)
-	fmt.Println("<<<<<<<>>>>>>>>>")
-	s3client := s3.New(s3fs.session)
-	params := &s3.ListObjectsV2Input{
-		Bucket:            aws.String(s3fs.config.S3Bucket),
-		Prefix:            &s3Path,
-		Delimiter:         &s3fs.delimiter,
-		MaxKeys:           &s3fs.maxKeys,
-		ContinuationToken: nil,
+// GetDir is similar to an ls unix call. It lists the objects at an s3 prefix, with the option of being recursive
+func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject, error) {
+	s3Path := strings.Trim(path, "/") + "/"
+	var delim string
+	if !recursive {
+		delim = "/"
 	}
-
-	resp, err := s3client.ListObjectsV2(params)
-	if err != nil {
-		log.Printf("failed to list objects in the bucket - %v", err)
+	s3client := s3.New(s3fs.session)
+	query := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(s3fs.config.S3Bucket),
+		Prefix:    aws.String(s3Path),
+		Delimiter: aws.String(delim),
+		MaxKeys:   aws.Int64(s3fs.maxKeys),
 	}
 
 	result := []FileStoreResultObject{}
-	var count int = 0
-	for _, cp := range resp.CommonPrefixes {
-		w := FileStoreResultObject{
-			ID:         count,
-			Name:       filepath.Base(*cp.Prefix),
-			Size:       "",
-			Path:       *cp.Prefix,
-			Type:       "",
-			IsDir:      true,
-			ModifiedBy: "",
-		}
-		count++
-		result = append(result, w)
-	}
+	truncatedListing := true
+	var count int
+	for truncatedListing {
 
-	for _, object := range resp.Contents {
-		w := FileStoreResultObject{
-			ID:         count,
-			Name:       filepath.Base(*object.Key),
-			Size:       strconv.FormatInt(*object.Size, 10),
-			Path:       filepath.Dir(*object.Key),
-			Type:       filepath.Ext(*object.Key),
-			IsDir:      false,
-			Modified:   *object.LastModified,
-			ModifiedBy: "",
+		resp, err := s3client.ListObjectsV2(query)
+		if err != nil {
+			return nil, err
 		}
-		count++
-		result = append(result, w)
+
+		for _, cp := range resp.CommonPrefixes {
+			w := FileStoreResultObject{
+				ID:         count,
+				Name:       filepath.Base(*cp.Prefix),
+				Size:       "",
+				Path:       *cp.Prefix,
+				Type:       "",
+				IsDir:      true,
+				ModifiedBy: "",
+			}
+			count++
+			result = append(result, w)
+		}
+
+		for _, object := range resp.Contents {
+			w := FileStoreResultObject{
+				ID:         count,
+				Name:       filepath.Base(*object.Key),
+				Size:       strconv.FormatInt(*object.Size, 10),
+				Path:       filepath.Dir(*object.Key),
+				Type:       filepath.Ext(*object.Key),
+				IsDir:      false,
+				Modified:   *object.LastModified,
+				ModifiedBy: "",
+			}
+			count++
+			result = append(result, w)
+		}
+
+		query.ContinuationToken = resp.NextContinuationToken
+		truncatedListing = *resp.IsTruncated
 	}
 
 	return &result, nil
 }
 
-func (s3fs *S3FS) GetObject(path PathConfig) (io.ReadCloser, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+// GetObject will return the body of an s3 object as a ReadCloser, meaning it has the basic Read and Close methods
+func (s3fs *S3FS) GetObject(path string) (io.ReadCloser, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
-		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(s3Path),
 	}
 	output, err := svc.GetObject(input)
 	return output.Body, err
 }
 
-func (s3fs *S3FS) DeleteObject(path string) error {
+// PutObject will take the data provided and put it on s3 at the path provided
+func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, error) {
 	s3Path := strings.TrimPrefix(path, "/")
-	svc := s3.New(s3fs.session)
-	input := &s3.DeleteObjectsInput{
-		Bucket: aws.String(s3fs.config.S3Bucket),
-		Delete: &s3.Delete{
-			Objects: []*s3.ObjectIdentifier{
-				{
-					Key: aws.String(s3Path),
-				},
-			},
-			Quiet: aws.Bool(false),
-		},
-	}
-	output, err := s3fs.deleteObjectsImpl(svc, input)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	log.Print(output)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	return err
-}
-
-func (s3fs *S3FS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
 	svc := s3.New(s3fs.session)
 	reader := bytes.NewReader(data)
 	input := &s3.PutObjectInput{
 		Body:          reader,
 		ContentLength: aws.Int64(int64(len(data))),
-		Key:           &s3Path,
+		Key:           aws.String(s3Path),
 	}
 	s3output, err := svc.PutObject(input)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Print(s3output)
-	output := &FileOperationOutput{
-		Md5: *s3output.ETag,
-	}
-	return output, err
+	return &FileOperationOutput{Md5: *s3output.ETag}, nil
 }
 
-func (s3fs *S3FS) deleteObjectsImpl(svc *s3.S3, input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
-	result, err := svc.DeleteObjects(input)
-	return result, err
-}
-
-func (s3fs *S3FS) DeleteObjects(path PathConfig) error {
+// DeleteObjects will take one or more paths, and delete them from the s3 file system
+func (s3fs *S3FS) DeleteObjects(path ...string) error {
 	svc := s3.New(s3fs.session)
-	objects := make([]*s3.ObjectIdentifier, 0, len(path.Paths))
-	for _, p := range path.Paths {
-		p := p
+	objects := make([]*s3.ObjectIdentifier, 0, len(path))
+	for _, p := range path {
 		s3Path := strings.TrimPrefix(p, "/")
 		object := &s3.ObjectIdentifier{
 			Key: aws.String(s3Path),
@@ -189,17 +175,14 @@ func (s3fs *S3FS) DeleteObjects(path PathConfig) error {
 		},
 	}
 
-	output, err := s3fs.deleteObjectsImpl(svc, input)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
-	log.Print(output)
-	log.Println("--------DELETE OPERATION OUTPUT------------")
+	_, err := svc.DeleteObjects(input)
 	return err
 }
 
 func (s3fs *S3FS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {
 	output := UploadResult{}
 	svc := s3.New(s3fs.session)
-	s3path := u.ObjectPath //@TODO incomoplete
+	s3path := u.ObjectPath //@TODO incomplete
 	s3path = strings.TrimPrefix(s3path, "/")
 	input := &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(s3fs.config.S3Bucket),
@@ -221,10 +204,10 @@ func (s3fs *S3FS) WriteChunk(u UploadConfig) (UploadResult, error) {
 	partNumber := u.ChunkId + 1 //aws chunks are 1 to n, our chunks are 0 referenced
 	partInput := &s3.UploadPartInput{
 		Body:          bytes.NewReader(u.Data),
-		Bucket:        &s3fs.config.S3Bucket,
-		Key:           &s3path,
+		Bucket:        aws.String(s3fs.config.S3Bucket),
+		Key:           aws.String(s3path),
 		PartNumber:    aws.Int64(partNumber),
-		UploadId:      &u.UploadId,
+		UploadId:      aws.String(u.UploadId),
 		ContentLength: aws.Int64(int64(len(u.Data))),
 	}
 	result, err := svc.UploadPart(partInput)
@@ -244,32 +227,32 @@ func (s3fs *S3FS) CompleteObjectUpload(u CompletedObjectUploadConfig) error {
 	s3path = strings.TrimPrefix(s3path, "/")
 	svc := s3.New(s3fs.session)
 	cp := []*s3.CompletedPart{}
-	for i, cuId := range u.ChunkUploadIds {
+	for i, cuID := range u.ChunkUploadIds {
 		cp = append(cp, &s3.CompletedPart{
-			ETag:       aws.String(cuId),
+			ETag:       aws.String(cuID),
 			PartNumber: aws.Int64(int64(i + 1)),
 		})
 	}
 	input := &s3.CompleteMultipartUploadInput{
-		Bucket:   &s3fs.config.S3Bucket,
-		Key:      &s3path,
-		UploadId: &u.UploadId,
+		Bucket:   aws.String(s3fs.config.S3Bucket),
+		Key:      aws.String(s3path),
+		UploadId: aws.String(u.UploadId),
 		MultipartUpload: &s3.CompletedMultipartUpload{
 			Parts: cp,
 		},
 	}
-	result, err := svc.CompleteMultipartUpload(input)
-	fmt.Print(result)
+	_, err := svc.CompleteMultipartUpload(input)
 	return err
 }
 
+// Walk will traverse an s3 file system recursively, starting at the provided prefix, and apply the visitorFunction to each s3 object
 func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 	s3Path := strings.TrimPrefix(path, "/")
 	s3delim := ""
 	query := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(s3fs.config.S3Bucket),
-		Prefix:    &s3Path,
-		Delimiter: &s3delim,
+		Prefix:    aws.String(s3Path),
+		Delimiter: aws.String(s3delim),
 	}
 	svc := s3.New(s3fs.session)
 
@@ -281,9 +264,11 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 			return err
 		}
 		for _, content := range resp.Contents {
-			//fmt.Printf("Processing: %s\n", *content.Key)
 			fileInfo := &S3FileInfo{content}
-			vistorFunction("/"+*content.Key, fileInfo)
+			err := vistorFunction("/"+*content.Key, fileInfo)
+			if err != nil {
+				return err
+			}
 		}
 		query.ContinuationToken = resp.NextContinuationToken
 		truncatedListing = *resp.IsTruncated
@@ -294,36 +279,37 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 /*
   these functions are not part of the filestore interface and are unique to the S3FS
 */
-func (s3fs *S3FS) GetPresignedUrl(path PathConfig, days int) (string, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+
+// SharedAccessURL will create a presigned url that can be used to access/download an object from an s3 bucket. It will only be valid for the duration specified
+func (s3fs *S3FS) SharedAccessURL(path string, expiration time.Duration) (string, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	input := &s3.GetObjectInput{
-		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(s3Path),
 	}
 	req, _ := svc.GetObjectRequest(input)
-	urlStr, err := req.Presign(time.Duration(24*days) * time.Hour)
-	if err != nil {
-		log.Println("Failed to sign request", err)
-	}
-	return urlStr, err
+	return req.Presign(expiration)
 }
 
-func (s3fs *S3FS) SetObjectPublic(path PathConfig) (string, error) {
-	s3Path := strings.TrimPrefix(path.Path, "/")
+// SetObjectPublic will change the acl permissions on an s3 object and make it publically readable
+func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {
+	s3Path := strings.TrimPrefix(path, "/")
 	svc := s3.New(s3fs.session)
 	acl := "public-read"
-	input := &s3.PutObjectAclInput{
-		Bucket: &s3fs.config.S3Bucket,
-		Key:    &s3Path,
-		ACL:    &acl,
-	}
-	aclResp, err := svc.PutObjectAcl(input)
-	if err != nil {
-		log.Printf("Failed to add public-read ACL on %s\n", s3Path)
-		log.Println(aclResp)
-	}
 	url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s3fs.config.S3Bucket, s3Path)
-	log.Println(url)
+	input := &s3.PutObjectAclInput{
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(s3Path),
+		ACL:    aws.String(acl),
+	}
+	_, err := svc.PutObjectAcl(input)
 	return url, err
+}
+
+// Ping makes a cheap call to the s3 bucket to ensure connection
+func (s3fs *S3FS) Ping() error {
+	svc := s3.New(s3fs.session)
+	_, err := svc.GetBucketAcl(&s3.GetBucketAclInput{Bucket: aws.String(s3fs.config.S3Bucket)})
+	return err
 }

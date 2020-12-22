@@ -1,6 +1,6 @@
-module di2e.net/cwbi/filestore
+module github.com/USACE/filestore
 
-go 1.13
+go 1.15
 
 require (
 	github.com/aws/aws-sdk-go v1.31.0

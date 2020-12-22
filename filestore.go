@@ -2,7 +2,6 @@ package filestore
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -23,11 +22,6 @@ const (
 )
 
 var chunkSize int64 = 10 * 1024 * 1024
-
-type PathConfig struct {
-	Path  string
-	Paths []string
-}
 
 type FileOperationOutput struct {
 	Md5 string
@@ -74,13 +68,11 @@ type UploadResult struct {
 
 type FileVisitFunction func(path string, file os.FileInfo) error
 
-//@TODO evaluate PathConfig as an input.  should this just be a string path.....
 type FileStore interface {
-	GetDir(path PathConfig) (*[]FileStoreResultObject, error)
-	GetObject(PathConfig) (io.ReadCloser, error)
-	PutObject(PathConfig, []byte) (*FileOperationOutput, error)
-	DeleteObject(path string) error //depricate eventually?
-	DeleteObjects(path PathConfig) error
+	GetDir(string, bool) (*[]FileStoreResultObject, error)
+	GetObject(string) (io.ReadCloser, error)
+	PutObject(string, []byte) (*FileOperationOutput, error)
+	DeleteObjects(path ...string) error
 	//PutMultipartObject(u UploadConfig) (UploadResult, error)
 	//InitializeMultipartWrite
 	//PutPart(u UploadConfig) (UploadResult, error)
@@ -108,15 +100,14 @@ func NewFileStore(config interface{}) (FileStore, error) {
 		}
 
 		fs := S3FS{
-			session:   sess,
-			config:    &s3config,
-			delimiter: "/",
-			maxKeys:   1000,
+			session: sess,
+			config:  &s3config,
+			maxKeys: 1000,
 		}
 		return &fs, nil
 
 	default:
-		return nil, errors.New(fmt.Sprintf("Invalid File System System Type Configuration: %v", scType))
+		return nil, fmt.Errorf("Invalid File System System Type Configuration: %v", scType)
 	}
 }
 

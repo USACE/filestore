@@ -18,46 +18,66 @@ type BlockFSConfig struct{}
 
 type BlockFS struct{}
 
-func (b *BlockFS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
-	fmt.Println(path.Path)
-	dirContents, err := ioutil.ReadDir(path.Path)
-	if err != nil {
-		return nil, err
-	}
-	objects := make([]FileStoreResultObject, len(dirContents))
-	for i, f := range dirContents {
-		size := strconv.FormatInt(f.Size(), 10)
-		objects[i] = FileStoreResultObject{
-			ID:         i,
-			Name:       f.Name(),
-			Size:       size,
-			Path:       path.Path,
-			Type:       filepath.Ext(f.Name()),
-			IsDir:      f.IsDir(),
-			Modified:   f.ModTime(),
-			ModifiedBy: "",
+func (b *BlockFS) GetDir(path string, recursive bool) (*[]FileStoreResultObject, error) {
+	fmt.Println(path)
+
+	var objects []FileStoreResultObject
+	switch recursive {
+	case true:
+		objects = make([]FileStoreResultObject, 0)
+		i := 0
+		err := filepath.Walk(
+			path,
+			func(path string, file os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				objects = append(objects, FileStoreResultObject{
+					ID:         i,
+					Name:       file.Name(),
+					Size:       strconv.FormatInt(file.Size(), 10),
+					Path:       filepath.Dir(path),
+					Type:       filepath.Ext(file.Name()),
+					IsDir:      file.IsDir(),
+					Modified:   file.ModTime(),
+					ModifiedBy: "",
+				})
+				i++
+				return nil
+			})
+		if err != nil {
+			return nil, err
+		}
+
+	case false:
+		contents, err := ioutil.ReadDir(path)
+		if err != nil {
+			return nil, err
+		}
+		objects = make([]FileStoreResultObject, len(contents))
+		for i, f := range contents {
+			objects[i] = FileStoreResultObject{
+				ID:         i,
+				Name:       f.Name(),
+				Size:       strconv.FormatInt(f.Size(), 10),
+				Path:       path,
+				Type:       filepath.Ext(f.Name()),
+				IsDir:      f.IsDir(),
+				Modified:   f.ModTime(),
+				ModifiedBy: "",
+			}
 		}
 	}
 	return &objects, nil
 }
 
-func (b *BlockFS) GetObject(path PathConfig) (io.ReadCloser, error) {
-	return os.Open(path.Path)
+func (b *BlockFS) GetObject(path string) (io.ReadCloser, error) {
+	return os.Open(path)
 }
 
-func (b *BlockFS) DeleteObject(path string) error {
+func (b *BlockFS) DeleteObjects(path ...string) error {
 	var err error
-	if isDir(path) {
-		err = os.RemoveAll(path)
-	} else {
-		err = os.Remove(path)
-	}
-	return err
-}
-
-func (b *BlockFS) DeleteObjects(path PathConfig) error {
-	var err error
-	for _, p := range path.Paths {
+	for _, p := range path {
 		if isDir(p) {
 			err = os.RemoveAll(p)
 		} else {
@@ -67,13 +87,13 @@ func (b *BlockFS) DeleteObjects(path PathConfig) error {
 	return err
 }
 
-func (b *BlockFS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {
+func (b *BlockFS) PutObject(path string, data []byte) (*FileOperationOutput, error) {
 	if len(data) == 0 {
 		f := FileOperationOutput{}
-		err := os.MkdirAll(filepath.Dir(path.Path), os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
 		return &f, err
 	} else {
-		f, err := os.OpenFile(path.Path, os.O_WRONLY|os.O_CREATE, 0644)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return nil, err
 		}
