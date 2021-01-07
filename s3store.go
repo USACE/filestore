@@ -144,6 +144,7 @@ func (s3fs *S3FS) PutObject(path string, data []byte) (*FileOperationOutput, err
 	svc := s3.New(s3fs.session)
 	reader := bytes.NewReader(data)
 	input := &s3.PutObjectInput{
+		Bucket:        aws.String(s3fs.config.S3Bucket),
 		Body:          reader,
 		ContentLength: aws.Int64(int64(len(data))),
 		Key:           aws.String(s3Path),
