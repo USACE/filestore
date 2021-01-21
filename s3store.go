@@ -105,18 +105,24 @@ func (s3fs *S3FS) GetDir(path string, recursive bool) (*[]FileStoreResultObject,
 		}
 
 		for _, object := range resp.Contents {
-			w := FileStoreResultObject{
-				ID:         count,
-				Name:       filepath.Base(*object.Key),
-				Size:       strconv.FormatInt(*object.Size, 10),
-				Path:       filepath.Dir(*object.Key),
-				Type:       filepath.Ext(*object.Key),
-				IsDir:      false,
-				Modified:   *object.LastModified,
-				ModifiedBy: "",
+			parts := strings.Split(filepath.Dir(*object.Key), "/")
+			isSelf := filepath.Base(*object.Key) == parts[len(parts)-1]
+
+			if !isSelf {
+				w := FileStoreResultObject{
+					ID:         count,
+					Name:       filepath.Base(*object.Key),
+					Size:       strconv.FormatInt(*object.Size, 10),
+					Path:       filepath.Dir(*object.Key),
+					Type:       filepath.Ext(*object.Key),
+					IsDir:      false,
+					Modified:   *object.LastModified,
+					ModifiedBy: "",
+				}
+
+				count++
+				result = append(result, w)
 			}
-			count++
-			result = append(result, w)
 		}
 
 		query.ContinuationToken = resp.NextContinuationToken
