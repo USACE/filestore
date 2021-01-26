@@ -317,6 +317,10 @@ func (s3fs *S3FS) SetObjectPublic(path string) (string, error) {
 // Ping makes a cheap call to the s3 bucket to ensure connection
 func (s3fs *S3FS) Ping() error {
 	svc := s3.New(s3fs.session)
-	_, err := svc.GetBucketAcl(&s3.GetBucketAclInput{Bucket: aws.String(s3fs.config.S3Bucket)})
+	listInput := &s3.ListObjectsV2Input{
+		Bucket:  aws.String(s3fs.config.S3Bucket),
+		MaxKeys: aws.Int64(1),
+	}
+	_, err := svc.ListObjectsV2(listInput)
 	return err
 }
