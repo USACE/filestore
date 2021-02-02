@@ -79,17 +79,12 @@ type FileStore interface {
 	GetDir(path PathConfig) (*[]FileStoreResultObject, error)
 	GetObject(PathConfig) (io.ReadCloser, error)
 	PutObject(PathConfig, []byte) (*FileOperationOutput, error)
-	DeleteObject(path string) error //depricate eventually?
-	DeleteObjects(path PathConfig) error
-	//PutMultipartObject(u UploadConfig) (UploadResult, error)
-	//InitializeMultipartWrite
-	//PutPart(u UploadConfig) (UploadResult, error)
-	Walk(string, FileVisitFunction) error
-
-	/////depricate
 	InitializeObjectUpload(UploadConfig) (UploadResult, error)
 	WriteChunk(UploadConfig) (UploadResult, error)
 	CompleteObjectUpload(CompletedObjectUploadConfig) error
+	DeleteObject(path string) error //depricate eventually?
+	DeleteObjects(path PathConfig) error
+	Walk(string, FileVisitFunction) error
 }
 
 func NewFileStore(config interface{}) (FileStore, error) {
@@ -170,22 +165,3 @@ func isDir(path string) bool {
 	}
 	return fi.Mode().IsDir()
 }
-
-//@TODO should be able to depricate this function
-/*
-func buildUrl(urlparts ...string) string {
-	var b strings.Builder
-	t := "%s"
-	for _, p := range urlparts {
-		fmt.Println(p)
-		if !strings.HasPrefix(p, "/") {
-			t = "/%s"
-		}
-		if strings.HasSuffix(p, "/") {
-			p = p[:len(p)-1]
-		}
-		fmt.Fprintf(&b, t, p)
-	}
-	return b.String()
-}
-*/

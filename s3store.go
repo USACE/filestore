@@ -60,10 +60,6 @@ type S3FS struct {
 
 func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 	s3Path := strings.TrimPrefix(path.Path, "/")
-	fmt.Println("<<<<<<<>>>>>>>>>")
-	fmt.Println("S3 DIR Request")
-	fmt.Println(s3Path)
-	fmt.Println("<<<<<<<>>>>>>>>>")
 	s3client := s3.New(s3fs.session)
 	params := &s3.ListObjectsV2Input{
 		Bucket:            aws.String(s3fs.config.S3Bucket),
@@ -149,6 +145,7 @@ func (s3fs *S3FS) PutObject(path PathConfig, data []byte) (*FileOperationOutput,
 	svc := s3.New(s3fs.session)
 	reader := bytes.NewReader(data)
 	input := &s3.PutObjectInput{
+		Bucket:        &s3fs.config.S3Bucket,
 		Body:          reader,
 		ContentLength: aws.Int64(int64(len(data))),
 		Key:           &s3Path,
