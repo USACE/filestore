@@ -1,4 +1,4 @@
-module di2e.net/cwbi/filestore
+module github.com/usace/filestore
 
 go 1.13
 
