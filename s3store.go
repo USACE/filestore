@@ -58,6 +58,10 @@ type S3FS struct {
 	maxKeys   int64
 }
 
+func(s3fs *S3FS) GetConfig() *S3FSConfig {
+	return s3fs.config
+}
+
 func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 	s3Path := strings.TrimPrefix(path.Path, "/")
 	s3client := s3.New(s3fs.session)
