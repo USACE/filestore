@@ -1,6 +1,7 @@
 package filestore
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -65,6 +66,10 @@ func (b *BlockFS) DeleteObjects(path PathConfig) error {
 		}
 	}
 	return err
+}
+
+func (b *BlockFS) UploadFile(filepath string, key string) error {
+	return errors.New("Not Implemented")
 }
 
 func (b *BlockFS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {

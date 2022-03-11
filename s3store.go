@@ -2,6 +2,7 @@ package filestore
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 type S3FileInfo struct {
@@ -58,7 +60,7 @@ type S3FS struct {
 	maxKeys   int64
 }
 
-func(s3fs *S3FS) GetConfig() *S3FSConfig {
+func (s3fs *S3FS) GetConfig() *S3FSConfig {
 	return s3fs.config
 }
 
@@ -141,6 +143,24 @@ func (s3fs *S3FS) DeleteObject(path string) error {
 	log.Println("--------DELETE OPERATION OUTPUT------------")
 	log.Print(output)
 	log.Println("--------DELETE OPERATION OUTPUT------------")
+	return err
+}
+
+func (s3fs *S3FS) UploadFile(filepath string, key string) error {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to open file %q, %v", filepath, err))
+	}
+
+	defer file.Close()
+
+	uploader := s3manager.NewUploader(s3fs.session)
+
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(key),
+		Body:   file,
+	})
 	return err
 }
 
