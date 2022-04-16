@@ -52,10 +52,15 @@ func (obj *S3FileInfo) Sys() interface{} {
 
 // S3FSConfig stores the configuration and credentials necessary to create an s3 instance of the filestore
 type S3FSConfig struct {
-	S3Id     string
-	S3Key    string
-	S3Region string
-	S3Bucket string
+	S3Id             string
+	S3Key            string
+	S3Region         string
+	S3Bucket         string
+	S3Endpoint       string
+	S3DisableSSL     bool
+	S3ForcePathStyle bool
+	S3Prefix         string
+	Mock             bool
 }
 
 // S3FS satisfies the FileStore interface, allowing for generic file operations to be done on s3 blobs
