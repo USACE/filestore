@@ -2,6 +2,7 @@ package filestore
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -62,6 +63,10 @@ type S3FS struct {
 
 func (s3fs *S3FS) GetConfig() *S3FSConfig {
 	return s3fs.config
+}
+
+func (s3fs *S3FS) ResourceName() string {
+	return s3fs.config.S3Bucket
 }
 
 func (s3fs *S3FS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
@@ -146,6 +151,15 @@ func (s3fs *S3FS) DeleteObject(path string) error {
 	return err
 }
 
+/*
+iter := s3manager.NewDeleteListIterator(svc, &s3.ListObjectsInput{
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Prefix: aws.String(s3Path),
+	})
+
+	err := s3manager.NewBatchDeleteWithClient(svc).Delete(context.Background(), iter)
+*/
+
 func (s3fs *S3FS) UploadFile(filepath string, key string) error {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -185,9 +199,36 @@ func (s3fs *S3FS) PutObject(path PathConfig, data []byte) (*FileOperationOutput,
 	return output, err
 }
 
+func (s3fs *S3FS) CopyObject(sourcePath PathConfig, destPath PathConfig) error {
+	source := strings.TrimPrefix(sourcePath.Path, "/")
+	dest := strings.TrimPrefix(destPath.Path, "/")
+	svc := s3.New(s3fs.session)
+	input := s3.CopyObjectInput{
+		Bucket:     &s3fs.config.S3Bucket,
+		CopySource: &source,
+		Key:        &dest,
+	}
+	_, err := svc.CopyObject(&input)
+	return err
+}
+
 func (s3fs *S3FS) deleteObjectsImpl(svc *s3.S3, input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
 	result, err := svc.DeleteObjects(input)
 	return result, err
+}
+
+func (s3fs *S3FS) deleteListImpl(svc *s3.S3, input *s3.DeleteObjectsInput) []error {
+	errs := []error{}
+	for _, obj := range input.Delete.Objects {
+		iter := s3manager.NewDeleteListIterator(svc, &s3.ListObjectsInput{
+			Bucket: input.Bucket,
+			Prefix: obj.Key,
+		})
+
+		err := s3manager.NewBatchDeleteWithClient(svc).Delete(context.Background(), iter)
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 func (s3fs *S3FS) DeleteObjects(path PathConfig) error {
@@ -203,18 +244,22 @@ func (s3fs *S3FS) DeleteObjects(path PathConfig) error {
 	}
 
 	input := &s3.DeleteObjectsInput{
-		Bucket: aws.String(s3fs.config.S3Bucket),
+		Bucket: &s3fs.config.S3Bucket,
 		Delete: &s3.Delete{
 			Objects: objects,
 			Quiet:   aws.Bool(false),
 		},
 	}
 
-	output, err := s3fs.deleteObjectsImpl(svc, input)
+	//output, err := s3fs.deleteObjectsImpl(svc, input)
+	errs := s3fs.deleteListImpl(svc, input)
 	log.Println("--------DELETE OPERATION OUTPUT------------")
-	log.Print(output)
+	log.Print(errs)
 	log.Println("--------DELETE OPERATION OUTPUT------------")
-	return err
+	if len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
 }
 
 func (s3fs *S3FS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {
@@ -223,8 +268,8 @@ func (s3fs *S3FS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {
 	s3path := u.ObjectPath //@TODO incomoplete
 	s3path = strings.TrimPrefix(s3path, "/")
 	input := &s3.CreateMultipartUploadInput{
-		Bucket: aws.String(s3fs.config.S3Bucket),
-		Key:    aws.String(s3path),
+		Bucket: &s3fs.config.S3Bucket,
+		Key:    &s3path,
 	}
 
 	resp, err := svc.CreateMultipartUpload(input)
@@ -304,7 +349,10 @@ func (s3fs *S3FS) Walk(path string, vistorFunction FileVisitFunction) error {
 		for _, content := range resp.Contents {
 			//fmt.Printf("Processing: %s\n", *content.Key)
 			fileInfo := &S3FileInfo{content}
-			vistorFunction("/"+*content.Key, fileInfo)
+			err = vistorFunction("/"+*content.Key, fileInfo)
+			if err != nil {
+				log.Printf("Visitor Function error: %s\n", err)
+			}
 		}
 		query.ContinuationToken = resp.NextContinuationToken
 		truncatedListing = *resp.IsTruncated

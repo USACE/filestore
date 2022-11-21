@@ -42,6 +42,10 @@ func (b *BlockFS) GetDir(path PathConfig) (*[]FileStoreResultObject, error) {
 	return &objects, nil
 }
 
+func (b *BlockFS) ResourceName() string {
+	return ""
+}
+
 func (b *BlockFS) GetObject(path PathConfig) (io.ReadCloser, error) {
 	return os.Open(path.Path)
 }
@@ -54,22 +58,6 @@ func (b *BlockFS) DeleteObject(path string) error {
 		err = os.Remove(path)
 	}
 	return err
-}
-
-func (b *BlockFS) DeleteObjects(path PathConfig) error {
-	var err error
-	for _, p := range path.Paths {
-		if isDir(p) {
-			err = os.RemoveAll(p)
-		} else {
-			err = os.Remove(p)
-		}
-	}
-	return err
-}
-
-func (b *BlockFS) UploadFile(filepath string, key string) error {
-	return errors.New("Not Implemented")
 }
 
 func (b *BlockFS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {
@@ -90,6 +78,39 @@ func (b *BlockFS) PutObject(path PathConfig, data []byte) (*FileOperationOutput,
 		}
 		return output, err
 	}
+}
+
+func (b *BlockFS) CopyObject(sourcePath PathConfig, destPath PathConfig) error {
+	src, err := os.Open(sourcePath.Path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dest, err := os.Create(destPath.Path)
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
+
+	_, err = io.Copy(src, dest)
+	return err
+}
+
+func (b *BlockFS) DeleteObjects(path PathConfig) error {
+	var err error
+	for _, p := range path.Paths {
+		if isDir(p) {
+			err = os.RemoveAll(p)
+		} else {
+			err = os.Remove(p)
+		}
+	}
+	return err
+}
+
+func (b *BlockFS) UploadFile(filepath string, key string) error {
+	return errors.New("Not Implemented")
 }
 
 func (b *BlockFS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {

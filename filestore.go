@@ -79,6 +79,8 @@ type FileStore interface {
 	GetDir(path PathConfig) (*[]FileStoreResultObject, error)
 	GetObject(PathConfig) (io.ReadCloser, error)
 	PutObject(PathConfig, []byte) (*FileOperationOutput, error)
+	CopyObject(source PathConfig, dest PathConfig) error
+	ResourceName() string
 	UploadFile(filepth string, key string) error
 	InitializeObjectUpload(UploadConfig) (UploadResult, error)
 	WriteChunk(UploadConfig) (UploadResult, error)
