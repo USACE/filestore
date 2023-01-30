@@ -160,6 +160,17 @@ iter := s3manager.NewDeleteListIterator(svc, &s3.ListObjectsInput{
 	err := s3manager.NewBatchDeleteWithClient(svc).Delete(context.Background(), iter)
 */
 
+func (s3fs *S3FS) Upload(reader io.Reader, key string) error {
+	uploader := s3manager.NewUploader(s3fs.session)
+
+	_, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(s3fs.config.S3Bucket),
+		Key:    aws.String(key),
+		Body:   reader,
+	})
+	return err
+}
+
 func (s3fs *S3FS) UploadFile(filepath string, key string) error {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -167,15 +178,7 @@ func (s3fs *S3FS) UploadFile(filepath string, key string) error {
 	}
 
 	defer file.Close()
-
-	uploader := s3manager.NewUploader(s3fs.session)
-
-	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(s3fs.config.S3Bucket),
-		Key:    aws.String(key),
-		Body:   file,
-	})
-	return err
+	return s3fs.Upload(file, key)
 }
 
 func (s3fs *S3FS) PutObject(path PathConfig, data []byte) (*FileOperationOutput, error) {

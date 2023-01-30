@@ -113,6 +113,10 @@ func (b *BlockFS) UploadFile(filepath string, key string) error {
 	return errors.New("Not Implemented")
 }
 
+func (b *BlockFS) Upload(reader io.Reader, key string) error {
+	return errors.New("Not Implemented")
+}
+
 func (b *BlockFS) InitializeObjectUpload(u UploadConfig) (UploadResult, error) {
 	fmt.Println(u.ObjectPath)
 	result := UploadResult{}
