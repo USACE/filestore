@@ -48,10 +48,15 @@ func (obj *S3FileInfo) Sys() interface{} {
 }
 
 type S3FSConfig struct {
-	S3Id     string
-	S3Key    string
-	S3Region string
-	S3Bucket string
+	S3Id             string
+	S3Key            string
+	S3Region         string
+	S3Bucket         string
+	S3Endpoint       string
+	S3DisableSSL     bool
+	S3ForcePathStyle bool
+	S3Prefix         string
+	Mock             bool
 }
 
 type S3FS struct {

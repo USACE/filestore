@@ -102,6 +102,14 @@ func NewFileStore(config interface{}) (FileStore, error) {
 		s3config := config.(S3FSConfig)
 		creds := credentials.NewStaticCredentials(s3config.S3Id, s3config.S3Key, "")
 		cfg := aws.NewConfig().WithRegion(s3config.S3Region).WithCredentials(creds)
+		if s3config.Mock {
+			cfg.WithDisableSSL(s3config.S3DisableSSL)
+			cfg.WithS3ForcePathStyle(s3config.S3ForcePathStyle)
+			if s3config.S3Endpoint != "" {
+				cfg.WithEndpoint(s3config.S3Endpoint)
+			}
+		}
+
 		sess, err := session.NewSession(cfg)
 		if err != nil {
 			return nil, err
